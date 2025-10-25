@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 import httpx
 import re
 from typing import Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 import logging
 import os
 from dotenv import load_dotenv
@@ -32,8 +32,44 @@ IMGUR_PATTERNS = [
     r'i\.imgur\.com/([a-zA-Z0-9]+\.\w+)',
 ]
 
+# SSRF Protection: Whitelist of allowed domains
+ALLOWED_IMGUR_DOMAINS = {
+    'imgur.com',
+    'i.imgur.com',
+    'www.imgur.com'
+}
+
+def validate_imgur_url(url: str) -> bool:
+    """
+    Strictly validate that URL is from Imgur to prevent SSRF attacks.
+    Returns True only if the URL is from an allowed Imgur domain.
+    """
+    try:
+        parsed = urlparse(url)
+        
+        if parsed.scheme not in ['http', 'https']:
+            logger.warning(f"Invalid scheme in URL: {url}")
+            return False
+        
+        if parsed.netloc not in ALLOWED_IMGUR_DOMAINS:
+            logger.warning(f"Domain not in whitelist: {parsed.netloc}")
+            return False
+        
+        if parsed.username or parsed.password:
+            logger.warning(f"URL contains credentials: {url}")
+            return False
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error parsing URL {url}: {e}")
+        return False
+
 def extract_imgur_id(url: str) -> Optional[tuple[str, str]]:
     """Extract Imgur ID and type from URL"""
+    if not validate_imgur_url(url):
+        logger.warning(f"URL failed validation: {url}")
+        return None
+    
     if 'imgur.com/' in url and '/gallery/' not in url and '/a/' not in url and 'i.imgur.com' not in url:
         path_match = re.search(r'imgur\.com/(.+)', url)
         if path_match:
@@ -59,6 +95,23 @@ def extract_imgur_id(url: str) -> Optional[tuple[str, str]]:
 def get_proxy_url(path: str) -> str:
     """Build full proxy URL using BASE_DOMAIN + BASE_PATH"""
     return urljoin(f"{BASE_DOMAIN}{BASE_PATH}/", path.lstrip("/"))
+
+def validate_imgur_id(imgur_id: str) -> bool:
+    """
+    Validate Imgur ID format to prevent path traversal or malicious input.
+    Imgur IDs are alphanumeric, typically 5-7 characters.
+    """
+    # Allow alphanumeric IDs (7 chars) and filenames with extensions
+    if not re.match(r'^[a-zA-Z0-9]{5,8}(\.[a-zA-Z0-9]{3,4})?$', imgur_id):
+        logger.warning(f"Invalid Imgur ID format: {imgur_id}")
+        return False
+    
+    # Prevent path traversal attempts
+    if '..' in imgur_id or '/' in imgur_id or '\\' in imgur_id:
+        logger.warning(f"Path traversal attempt detected: {imgur_id}")
+        return False
+    
+    return True
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -87,7 +140,12 @@ async def proxy_url(url: str):
 @app.get("/i/{filename}")
 async def serve_direct_image(filename: str):
     """Serve images from i.imgur.com directly"""
+
+    if not validate_imgur_id(filename):
+        raise HTTPException(status_code=400, detail="Invalid filename format")
+    
     imgur_url = f"https://i.imgur.com/{filename}"
+    
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0',
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
@@ -124,6 +182,9 @@ async def serve_direct_image(filename: str):
 async def serve_image(imgur_id: str):
     """Serve Imgur images by ID - tries multiple extensions"""
     logger.info(f"Attempting to serve image with ID: {imgur_id}")
+    
+    if not validate_imgur_id(imgur_id):
+        raise HTTPException(status_code=400, detail="Invalid Imgur ID format")
     
     extensions = ['jpg', 'png', 'gif', 'jpeg', 'webp']
     
