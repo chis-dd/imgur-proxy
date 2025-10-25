@@ -7,8 +7,11 @@ import re
 from typing import Optional
 from urllib.parse import urlparse
 import logging
+import os
+from dotenv import load_dotenv
 
-# Set up logging
+load_dotenv()
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -166,4 +169,9 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+    
+    logger.info(f"Starting server on {host}:{port}")
+    uvicorn.run(app, host=host, port=port)
