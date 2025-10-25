@@ -1,11 +1,10 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import httpx
 import re
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urljoin
 import logging
 import os
 from dotenv import load_dotenv
@@ -15,7 +14,16 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Imgur Proxy", description="Access Imgur content from anywhere")
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = int(os.getenv("PORT", "8000"))
+BASE_DOMAIN = os.getenv("BASE_DOMAIN", "http://localhost:8000")
+BASE_PATH = os.getenv("BASE_PATH", "")
+
+app = FastAPI(
+    title="Imgur Proxy",
+    description="Access Imgur content from anywhere",
+    root_path=BASE_PATH or None
+)
 
 templates = Jinja2Templates(directory="templates")
 
@@ -29,8 +37,7 @@ def extract_imgur_id(url: str) -> Optional[tuple[str, str]]:
     if 'imgur.com/' in url and '/gallery/' not in url and '/a/' not in url and 'i.imgur.com' not in url:
         path_match = re.search(r'imgur\.com/(.+)', url)
         if path_match:
-            path = path_match.group(1)
-            path = path.split('?')[0].split('#')[0]
+            path = path_match.group(1).split('?')[0].split('#')[0]
             id_match = re.search(r'([a-zA-Z0-9]{7})$', path)
             if id_match:
                 return ('image', id_match.group(1))
@@ -49,12 +56,9 @@ def extract_imgur_id(url: str) -> Optional[tuple[str, str]]:
                 return ('image', imgur_id)
     return None
 
-def get_imgur_url(content_type: str, imgur_id: str) -> str:
-    """Construct the appropriate Imgur URL"""
-    if content_type == 'direct':
-        return f"https://i.imgur.com/{imgur_id}"
-    else:
-        return f"https://i.imgur.com/{imgur_id}.jpg"
+def get_proxy_url(path: str) -> str:
+    """Build full proxy URL using BASE_DOMAIN + BASE_PATH"""
+    return urljoin(f"{BASE_DOMAIN}{BASE_PATH}/", path.lstrip("/"))
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -74,15 +78,16 @@ async def proxy_url(url: str):
     logger.info(f"Extracted ID: {imgur_id} from URL: {url}")
     
     if content_type == 'direct':
-        return RedirectResponse(url=f"/i/{imgur_id}")
+        redirect_target = get_proxy_url(f"i/{imgur_id}")
     else:
-        return RedirectResponse(url=f"/{imgur_id}")
+        redirect_target = get_proxy_url(f"{imgur_id}")
+
+    return RedirectResponse(url=redirect_target)
 
 @app.get("/i/{filename}")
 async def serve_direct_image(filename: str):
     """Serve images from i.imgur.com directly"""
     imgur_url = f"https://i.imgur.com/{filename}"
-    
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0',
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
@@ -137,7 +142,7 @@ async def serve_image(imgur_id: str):
     
     for ext in extensions:
         imgur_url = f"https://i.imgur.com/{imgur_id}.{ext}"
-        logger.info(f"Trying: {imgur_url}")
+        logger.debug(f"Trying: {imgur_url}")
         
         try:
             async with httpx.AsyncClient(timeout=30.0, headers=headers, follow_redirects=True) as client:
@@ -169,9 +174,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    
-    host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "8000"))
-    
-    logger.info(f"Starting server on {host}:{port}")
-    uvicorn.run(app, host=host, port=port)
+    logger.info(f"Starting server on {HOST}:{PORT}")
+    uvicorn.run(app, host=HOST, port=PORT)
