@@ -36,7 +36,8 @@ IMGUR_PATTERNS = [
 ALLOWED_IMGUR_DOMAINS = {
     'imgur.com',
     'i.imgur.com',
-    'www.imgur.com'
+    'www.imgur.com',
+    'api.imgur.com'
 }
 
 def validate_imgur_url(url: str) -> bool:
@@ -70,26 +71,29 @@ def extract_imgur_id(url: str) -> Optional[tuple[str, str]]:
         logger.warning(f"URL failed validation: {url}")
         return None
     
-    if 'imgur.com/' in url and '/gallery/' not in url and '/a/' not in url and 'i.imgur.com' not in url:
+    if '/a/' in url:
+        album_match = re.search(r'/a/([a-zA-Z0-9]+)', url)
+        if album_match:
+            return ('album', album_match.group(1))
+    
+    if '/gallery/' in url:
+        gallery_match = re.search(r'/gallery/([a-zA-Z0-9]+)', url)
+        if gallery_match:
+            return ('gallery', gallery_match.group(1))
+    
+    if 'i.imgur.com' in url:
+        direct_match = re.search(r'i\.imgur\.com/([a-zA-Z0-9]+\.\w+)', url)
+        if direct_match:
+            return ('direct', direct_match.group(1))
+    
+    if 'imgur.com/' in url:
         path_match = re.search(r'imgur\.com/(.+)', url)
         if path_match:
             path = path_match.group(1).split('?')[0].split('#')[0]
-            id_match = re.search(r'([a-zA-Z0-9]{7})$', path)
+            id_match = re.search(r'([a-zA-Z0-9]{5,7})$', path)
             if id_match:
                 return ('image', id_match.group(1))
     
-    for pattern in IMGUR_PATTERNS:
-        match = re.search(pattern, url)
-        if match:
-            imgur_id = match.group(1)
-            if '/a/' in url:
-                return ('album', imgur_id)
-            elif '/gallery/' in url:
-                return ('gallery', imgur_id)
-            elif '.' in imgur_id:
-                return ('direct', imgur_id)
-            else:
-                return ('image', imgur_id)
     return None
 
 def get_proxy_url(path: str) -> str:
@@ -132,15 +136,82 @@ async def proxy_url(url: str):
     
     if content_type == 'direct':
         redirect_target = get_proxy_url(f"i/{imgur_id}")
+    elif content_type == 'album':
+        redirect_target = get_proxy_url(f"a/{imgur_id}")
     else:
         redirect_target = get_proxy_url(f"{imgur_id}")
 
     return RedirectResponse(url=redirect_target)
 
+@app.get("/a/{album_id}", response_class=HTMLResponse)
+async def serve_album(album_id: str, request: Request):
+    """Serve Imgur album as a gallery"""
+    logger.info(f"Attempting to serve album with ID: {album_id}")
+    
+    if not validate_imgur_id(album_id):
+        raise HTTPException(status_code=400, detail="Invalid album ID format")
+    
+    api_url = f"https://api.imgur.com/post/v1/albums/{album_id}"
+    params = {
+        'client_id': 'd70305e7c3ac5c6',
+        'include': 'media,adconfig,account,tags'
+    }
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0',
+        'Accept': '*/*',
+        'Accept-Language': 'en-GB,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': 'https://imgur.com/',
+        'Origin': 'https://imgur.com',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-site',
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+            response = await client.get(api_url, params=params)
+            response.raise_for_status()
+            
+            album_data = response.json()
+            
+            images = []
+            for media in album_data.get('media', []):
+                image_id = media['id']
+                images.append({
+                    'id': image_id,
+                    'url': get_proxy_url(f"i/{image_id}.{media['ext']}"),
+                    'width': media.get('width', 0),
+                    'height': media.get('height', 0),
+                    'name': media.get('name', ''),
+                    'mime_type': media.get('mime_type', 'image/jpeg')
+                })
+            
+            if not images:
+                raise HTTPException(status_code=404, detail="Album is empty or not found")
+            
+            return templates.TemplateResponse("album.html", {
+                "request": request,
+                "album_id": album_id,
+                "title": album_data.get('title', 'Imgur Album'),
+                "description": album_data.get('description', ''),
+                "image_count": len(images),
+                "images": images
+            })
+            
+    except httpx.HTTPError as e:
+        logger.error(f"Error fetching album {album_id}: {e}")
+        raise HTTPException(status_code=404, detail="Album not found")
+    except Exception as e:
+        logger.error(f"Error processing album {album_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error processing album")
+
 @app.get("/i/{filename}")
 async def serve_direct_image(filename: str):
     """Serve images from i.imgur.com directly"""
-
     if not validate_imgur_id(filename):
         raise HTTPException(status_code=400, detail="Invalid filename format")
     
