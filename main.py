@@ -5,8 +5,10 @@ from fastapi.templating import Jinja2Templates
 import httpx
 import re
 from typing import Optional
+from urllib.parse import urlparse
 import logging
 
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -17,8 +19,6 @@ templates = Jinja2Templates(directory="templates")
 IMGUR_PATTERNS = [
     r'imgur\.com/([a-zA-Z0-9]+)',
     r'i\.imgur\.com/([a-zA-Z0-9]+\.\w+)',
-    r'imgur\.com/a/([a-zA-Z0-9]+)',
-    r'imgur\.com/gallery/([a-zA-Z0-9]+)',
 ]
 
 def extract_imgur_id(url: str) -> Optional[tuple[str, str]]:
@@ -50,10 +50,6 @@ def get_imgur_url(content_type: str, imgur_id: str) -> str:
     """Construct the appropriate Imgur URL"""
     if content_type == 'direct':
         return f"https://i.imgur.com/{imgur_id}"
-    elif content_type == 'album':
-        return f"https://imgur.com/a/{imgur_id}"
-    elif content_type == 'gallery':
-        return f"https://imgur.com/gallery/{imgur_id}"
     else:
         return f"https://i.imgur.com/{imgur_id}.jpg"
 
@@ -102,7 +98,6 @@ async def serve_direct_image(filename: str):
             response = await client.get(imgur_url)
             response.raise_for_status()
             
-            # Get content type
             content_type = response.headers.get("content-type", "image/jpeg")
             
             return StreamingResponse(
@@ -124,7 +119,6 @@ async def serve_image(imgur_id: str):
     
     extensions = ['jpg', 'png', 'gif', 'jpeg', 'webp']
     
-    # Browser-like headers to avoid rate limiting
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0',
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
