@@ -72,13 +72,15 @@
   <script>
     document.getElementById('url-form').addEventListener('submit', function(e) {
       e.preventDefault();
-      
+
       const input = document.getElementById('imgur-url').value.trim();
-      
-      if (input) {
-        // Send to backend /proxy endpoint - let backend handle ALL parsing
-        window.location.href = '/proxy?url=' + encodeURIComponent(input);
-      }
+      if (!input) return;
+
+      // Get current base path dynamically
+      const basePath = window.location.pathname.replace(/\/$/, ''); 
+      const proxyUrl = basePath + '/proxy?url=' + encodeURIComponent(input);
+
+      window.location.href = proxyUrl;
     });
   </script>
 </body>
