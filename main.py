@@ -27,7 +27,9 @@ app = FastAPI(
 )
 
 templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+
+static_path = f"{BASE_PATH}/static" if BASE_PATH else "/static"
+app.mount(static_path, StaticFiles(directory="static"), name="static")
 
 IMGUR_PATTERNS = [
     r'imgur\.com/([a-zA-Z0-9]+)',
