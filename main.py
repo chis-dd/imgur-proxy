@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import httpx
 import re
 from typing import Optional
@@ -213,7 +214,9 @@ async def serve_album(album_id: str, request: Request):
                 "title": album_data.get('title', 'Imgur Album'),
                 "description": album_data.get('description', ''),
                 "image_count": len(images),
-                "images": images
+                "images": images,
+                "base_domain": BASE_DOMAIN,
+                "base_path": BASE_PATH
             })
             
     except httpx.HTTPError as e:
@@ -317,7 +320,9 @@ async def serve_image(imgur_id: str, request: Request):
                 "description": description,
                 "width": width,
                 "height": height,
-                "mime_type": mime_type
+                "mime_type": mime_type,
+                "base_domain": BASE_DOMAIN,
+                "base_path": BASE_PATH
             })
 
     except httpx.HTTPError as e:
