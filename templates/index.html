@@ -3,61 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>imgur proxy</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #1a1a1a;
-      color: #ffffff;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .container {
-      width: 100%;
-      max-width: 600px;
-      text-align: center;
-    }
-    h1 {
-      font-size: 2.5rem;
-      font-weight: 300;
-      margin-bottom: 40px;
-      color: #ffffff;
-    }
-    form {
-      width: 100%;
-    }
-    input[type="text"] {
-      width: 100%;
-      padding: 16px 20px;
-      font-size: 16px;
-      background: #2a2a2a;
-      border: 1px solid #3a3a3a;
-      border-radius: 8px;
-      color: #ffffff;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    input[type="text"]:focus {
-      border-color: #4a4a4a;
-    }
-    input[type="text"]::placeholder {
-      color: #666666;
-    }
-  </style>
+  <title>mirrgr - imgur proxy</title>
+  <link rel="stylesheet" href="/static/output.css">
 </head>
-<body>
-  <div class="container">
-    <h1>imgur proxy</h1>
+<body class="bg-neutral-900 text-white min-h-screen flex items-center justify-center p-5">
+  <div class="w-full max-w-xl text-center">
+    <div class="mb-12">
+      <h1 class="text-6xl font-light mb-4 tracking-tight">mirrgr</h1>
+      <p class="text-lg text-neutral-400 font-light">
+        view imgur content from anywhere
+      </p>
+    </div>
     
-    <form id="url-form">
+    <form id="url-form" class="mb-6">
       <input
         type="text"
         id="imgur-url"
@@ -65,21 +23,22 @@
         autocomplete="off"
         spellcheck="false"
         autofocus
+        class="w-full px-5 py-4 text-base bg-neutral-800 border border-neutral-700 rounded-lg text-white outline-none focus:border-neutral-600 placeholder:text-neutral-500 transition-colors"
       >
     </form>
+    
+    <p class="text-sm text-neutral-500">
+      supports images, albums, and galleries
+    </p>
   </div>
-  
+ 
   <script>
     document.getElementById('url-form').addEventListener('submit', function(e) {
       e.preventDefault();
-
       const input = document.getElementById('imgur-url').value.trim();
       if (!input) return;
-
-      // Get current base path dynamically
-      const basePath = window.location.pathname.replace(/\/$/, ''); 
+      const basePath = window.location.pathname.replace(/\/$/, '');
       const proxyUrl = basePath + '/proxy?url=' + encodeURIComponent(input);
-
       window.location.href = proxyUrl;
     });
   </script>

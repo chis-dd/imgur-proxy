@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 import httpx
 import re
 from typing import Optional
@@ -26,6 +27,7 @@ app = FastAPI(
 )
 
 templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 IMGUR_PATTERNS = [
     r'imgur\.com/([a-zA-Z0-9]+)',
@@ -72,14 +74,20 @@ def extract_imgur_id(url: str) -> Optional[tuple[str, str]]:
         return None
     
     if '/a/' in url:
-        album_match = re.search(r'/a/([a-zA-Z0-9]+)', url)
+        album_match = re.search(r'/a/(?:.*-)?([a-zA-Z0-9]{7})(?:[/?#]|$)', url)
+        if album_match:
+            return ('album', album_match.group(1))
+        album_match = re.search(r'/a/([a-zA-Z0-9]{5,7})(?:[/?#]|$)', url)
         if album_match:
             return ('album', album_match.group(1))
     
     if '/gallery/' in url:
-        gallery_match = re.search(r'/gallery/([a-zA-Z0-9]+)', url)
+        gallery_match = re.search(r'/gallery/(?:.*-)?([a-zA-Z0-9]{7})(?:[/?#]|$)', url)
         if gallery_match:
-            return ('gallery', gallery_match.group(1))
+            return ('album', gallery_match.group(1)) 
+        gallery_match = re.search(r'/gallery/([a-zA-Z0-9]{5,7})(?:[/?#]|$)', url)
+        if gallery_match:
+            return ('album', gallery_match.group(1))
     
     if 'i.imgur.com' in url:
         direct_match = re.search(r'i\.imgur\.com/([a-zA-Z0-9]+\.\w+)', url)
@@ -153,8 +161,8 @@ async def serve_album(album_id: str, request: Request):
     
     api_url = f"https://api.imgur.com/post/v1/albums/{album_id}"
     params = {
-        'client_id': 'd70305e7c3ac5c6',
-        'include': 'media,adconfig,account,tags'
+        'client_id': 'cf37933da20ab71',
+        'include': 'media'
     }
     
     headers = {
@@ -181,12 +189,17 @@ async def serve_album(album_id: str, request: Request):
             images = []
             for media in album_data.get('media', []):
                 image_id = media['id']
+                
+                metadata = media.get('metadata', {})
+                description = metadata.get('description', '') or metadata.get('title', '') or media.get('name', '')
+                
                 images.append({
                     'id': image_id,
                     'url': get_proxy_url(f"i/{image_id}.{media['ext']}"),
                     'width': media.get('width', 0),
                     'height': media.get('height', 0),
-                    'name': media.get('name', ''),
+                    'name': description,
+                    'description': description,
                     'mime_type': media.get('mime_type', 'image/jpeg')
                 })
             
@@ -249,55 +262,70 @@ async def serve_direct_image(filename: str):
         logger.error(f"Error fetching {imgur_url}: {e}")
         raise HTTPException(status_code=404, detail="Image not found")
 
-@app.get("/{imgur_id}")
-async def serve_image(imgur_id: str):
-    """Serve Imgur images by ID - tries multiple extensions"""
+@app.get("/{imgur_id}", response_class=HTMLResponse)
+async def serve_image(imgur_id: str, request: Request):
+    """Serve Imgur images by ID in image viewer"""
     logger.info(f"Attempting to serve image with ID: {imgur_id}")
     
     if not validate_imgur_id(imgur_id):
         raise HTTPException(status_code=400, detail="Invalid Imgur ID format")
     
-    extensions = ['jpg', 'png', 'gif', 'jpeg', 'webp']
-    
+    api_url = f"https://api.imgur.com/post/v1/media/{imgur_id}"
+    params = {
+        'client_id': 'cf37933da20ab71',
+        'include': 'media'
+    }
+
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0',
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': '*/*',
+        'Accept-Language': 'en-GB,en;q=0.5',
         'Accept-Encoding': 'gzip, deflate, br',
         'Referer': 'https://imgur.com/',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Sec-Fetch-Dest': 'image',
-        'Sec-Fetch-Mode': 'no-cors',
-        'Sec-Fetch-Site': 'cross-site',
+        'Origin': 'https://imgur.com',
     }
-    
-    for ext in extensions:
-        imgur_url = f"https://i.imgur.com/{imgur_id}.{ext}"
-        logger.debug(f"Trying: {imgur_url}")
-        
-        try:
-            async with httpx.AsyncClient(timeout=30.0, headers=headers, follow_redirects=True) as client:
-                response = await client.get(imgur_url)
-                logger.info(f"Response status for {imgur_url}: {response.status_code}")
-                
-                if response.status_code == 200:
-                    content_type = response.headers.get("content-type", f"image/{ext}")
-                    
-                    return StreamingResponse(
-                        iter([response.content]),
-                        media_type=content_type,
-                        headers={
-                            "Cache-Control": "public, max-age=86400",
-                            "Access-Control-Allow-Origin": "*"
-                        }
-                    )
-        except httpx.HTTPError as e:
-            logger.error(f"Error trying {imgur_url}: {e}")
-            continue
-    
-    logger.error(f"Image not found with ID {imgur_id} after trying all extensions")
-    raise HTTPException(status_code=404, detail="Image not found with any common extension")
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+            response = await client.get(api_url, params=params)
+            response.raise_for_status()
+            media_data = response.json()
+
+            media_list = media_data.get("media", [])
+            if not media_list:
+                raise HTTPException(status_code=404, detail="No media found in response")
+
+            m = media_list[0]
+
+            image_id = m["id"]
+            ext = m.get("ext", "jpg")
+            mime_type = m.get("mime_type", "image/jpeg")
+            width = m.get("width", 0)
+            height = m.get("height", 0)
+            metadata = m.get("metadata", {})
+            title = metadata.get("title", "") or m.get("name", "") or f"{image_id}.{ext}"
+            description = metadata.get("description", "") or ""
+
+            image_url = get_proxy_url(f"i/{image_id}.{ext}")
+
+            return templates.TemplateResponse("image.html", {
+                "request": request,
+                "image_id": f"{image_id}.{ext}",
+                "image_url": image_url,
+                "title": title,
+                "description": description,
+                "width": width,
+                "height": height,
+                "mime_type": mime_type
+            })
+
+    except httpx.HTTPError as e:
+        logger.error(f"Error fetching image {imgur_id}: {e}")
+        raise HTTPException(status_code=404, detail="Image not found")
+    except Exception as e:
+        logger.error(f"Error processing image {imgur_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error processing image")
+
 
 @app.get("/health")
 async def health_check():

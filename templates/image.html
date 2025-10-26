@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title if title else image_id }} - mirrgr</title>
+  <link rel="stylesheet" href="/static/output.css">
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5.4.3/dist/photoswipe.css">
+
+  <style>
+    .pswp {
+      --pswp-bg: #0a0a0a;
+      --pswp-placeholder-bg: #171717;
+      --pswp-icon-color: #ffffff;
+      --pswp-icon-color-secondary: #a3a3a3;
+    }
+    .pswp__button {
+      background-color: rgba(38,38,38,0.8)!important;
+      backdrop-filter: blur(10px);
+    }
+    .pswp__button:hover {
+      background-color: rgba(64,64,64,0.9)!important;
+    }
+    .pswp__top-bar {
+      background: linear-gradient(180deg, rgba(10,10,10,0.9) 0%, transparent 100%);
+      backdrop-filter: blur(10px);
+    }
+    .pswp__counter {
+      color: #ffffff;
+    }
+  </style>
+</head>
+
+<body class="bg-neutral-900 text-white">
+  <header class="sticky top-0 bg-neutral-800 border-b border-neutral-700 z-40">
+    <div class="max-w-7xl mx-auto px-4 py-4">
+      <div class="flex items-center gap-3">
+        <a href="/" class="text-neutral-400 hover:text-white transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+          </svg>
+        </a>
+        <div>
+          <h1 class="text-lg font-light">{{ title if title else image_id }}</h1>
+          {% if description %}
+          <p class="text-xs text-neutral-500 font-light">
+            {{ description[:100] }}{% if description|length > 100 %}...{% endif %}
+          </p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <div class="flex flex-col items-center">
+      <div id="gallery" class="w-full max-w-5xl">
+
+        <a href="{{ image_url }}"
+           data-pswp-width="{{ width }}"
+           data-pswp-height="{{ height }}"
+           {% if mime_type and 'video' in mime_type %}
+           data-pswp-type="video"
+           {% endif %}
+           class="relative block bg-neutral-800 rounded-lg overflow-hidden border border-neutral-700 hover:border-neutral-600 transition-colors group"
+           style="aspect-ratio: {{ width }}/{{ height }}; min-height: 200px;">
+           
+          {% if mime_type and 'video' in mime_type %}
+          <video class="absolute inset-0 w-full h-full object-contain" controls>
+            <source src="{{ image_url }}" type="{{ mime_type }}">
+          </video>
+          <div class="absolute top-2 right-2 bg-black/60 rounded-full p-2 z-30">
+            <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </div>
+          {% else %}
+          <img src="{{ image_url }}"
+               alt="{{ description if description else image_id }}"
+               loading="lazy"
+               class="absolute inset-0 w-full h-full object-contain transition-transform duration-300 group-hover:scale-105">
+          {% endif %}
+
+          <div class="absolute inset-0 bg-black opacity-0 group-hover:opacity-40 transition-opacity pointer-events-none z-10"></div>
+          <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
+            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7-7 0 0114 0zM10 7v6m3-3H7"/>
+            </svg>
+          </div>
+        </a>
+      </div>
+
+      {% if description %}
+      <div class="mt-6 max-w-3xl text-neutral-400 text-sm leading-relaxed">
+        {{ description }}
+      </div>
+      {% endif %}
+    </div>
+  </main>
+
+  <script type="module">
+    import PhotoSwipeLightbox from 'https://cdn.jsdelivr.net/npm/photoswipe@5.4.3/dist/photoswipe-lightbox.esm.js';
+    import PhotoSwipe from 'https://cdn.jsdelivr.net/npm/photoswipe@5.4.3/dist/photoswipe.esm.js';
+
+    const lightbox = new PhotoSwipeLightbox({
+      gallery: '#gallery',
+      children: 'a',
+      pswpModule: PhotoSwipe,
+      showHideAnimationType: 'fade',
+      bgOpacity: 0.98,
+      padding: { top: 50, bottom: 50, left: 20, right: 20 },
+      wheelToZoom: true,
+      closeOnVerticalDrag: true,
+      pinchToClose: true,
+      zoom: true,
+      counter: false,
+      arrowPrev: false,
+      arrowNext: false,
+    });
+
+    lightbox.on('contentLoad', (e) => {
+      const { content } = e;
+      if (content.type === 'video') {
+        e.preventDefault();
+        const video = document.createElement('video');
+        video.controls = true;
+        video.autoplay = true;
+        const source = document.createElement('source');
+        source.src = content.data.src;
+        source.type = 'video/mp4';
+        video.appendChild(source);
+        video.style.maxWidth = '100%';
+        video.style.maxHeight = '100%';
+        content.element = video;
+      }
+    });
+
+    lightbox.init();
+  </script>
+</body>
+</html>

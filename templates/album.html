@@ -3,425 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title if title else 'imgur album' }} - imgur proxy</title>
+    <title>{{ title if title else 'imgur album' }} - mirrgr</title>
+    <link rel="stylesheet" href="/static/output.css">
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5.4.3/dist/photoswipe.css">
+    
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        .pswp {
+            --pswp-bg: #0a0a0a;
+            --pswp-placeholder-bg: #171717;
+            --pswp-icon-color: #ffffff;
+            --pswp-icon-color-secondary: #a3a3a3;
         }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a1a;
+        
+        .pswp__button {
+            background-color: rgba(38, 38, 38, 0.8) !important;
+            backdrop-filter: blur(10px);
+        }
+        
+        .pswp__button:hover {
+            background-color: rgba(64, 64, 64, 0.9) !important;
+        }
+        
+        .pswp__top-bar {
+            background: linear-gradient(180deg, rgba(10, 10, 10, 0.9) 0%, transparent 100%);
+            backdrop-filter: blur(10px);
+        }
+        
+        .pswp__counter {
             color: #ffffff;
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-
-        .header h1 {
-            font-size: 2rem;
-            font-weight: 300;
-            margin-bottom: 10px;
-            color: #ffffff;
-        }
-
-        .header .description {
-            color: #666666;
-            font-size: 14px;
-            font-weight: 300;
-        }
-
-        .gallery {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        .gallery-image {
-            width: 100%;
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            border-radius: 8px;
-            overflow: hidden;
-            cursor: pointer;
-            transition: border-color 0.2s;
-            position: relative;
-        }
-
-        .gallery-image:hover {
-            border-color: #4a4a4a;
-        }
-
-        .gallery-image img {
-            width: 100%;
-            height: auto;
-            display: block;
-            max-height: 80vh;
-            object-fit: contain;
-            background: #2a2a2a;
-        }
-
-        /* Loading state for images */
-        .gallery-image.loading::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 30px;
-            height: 30px;
-            border: 3px solid #3a3a3a;
-            border-top-color: #ffffff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        .image-counter {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 300;
-            color: #ffffff;
-        }
-
-        .navigation {
-            position: fixed;
-            top: 50%;
-            right: 20px;
-            transform: translateY(-50%);
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            padding: 12px;
-            border-radius: 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            align-items: center;
-        }
-
-        .nav-btn {
-            background: transparent;
-            color: #ffffff;
-            border: 1px solid #3a3a3a;
-            padding: 12px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 300;
-            transition: border-color 0.2s, color 0.2s;
-            width: 100%;
-        }
-
-        .nav-btn:hover:not(:disabled) {
-            border-color: #4a4a4a;
-        }
-
-        .nav-btn:disabled {
-            color: #666666;
-            cursor: not-allowed;
-        }
-
-        .current-indicator {
-            color: #666666;
-            font-size: 14px;
-            font-weight: 300;
-            text-align: center;
-            padding: 8px 0;
-        }
-
-        /* Image Viewer Modal */
-        .image-viewer {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.95);
-            z-index: 1000;
-            cursor: zoom-out;
-        }
-
-        .image-viewer.active {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .image-viewer img {
-            max-width: 95%;
-            max-height: 95%;
-            object-fit: contain;
-            user-select: none;
-        }
-
-        .viewer-close {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            color: #ffffff;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 300;
-            transition: border-color 0.2s;
-            z-index: 1001;
-        }
-
-        .viewer-close:hover {
-            border-color: #4a4a4a;
-        }
-
-        .viewer-nav {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            background: #2a2a2a;
-            border: 1px solid #3a3a3a;
-            color: #ffffff;
-            padding: 15px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 18px;
-            font-weight: 300;
-            transition: border-color 0.2s;
-            z-index: 1001;
-        }
-
-        .viewer-nav:hover:not(:disabled) {
-            border-color: #4a4a4a;
-        }
-
-        .viewer-nav:disabled {
-            color: #666666;
-            cursor: not-allowed;
-        }
-
-        .viewer-nav.prev {
-            left: 20px;
-        }
-
-        .viewer-nav.next {
-            right: 20px;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                padding: 20px 10px;
-            }
-            
-            .header h1 {
-                font-size: 1.5rem;
-            }
-
-            .image-counter {
-                top: 10px;
-                left: 10px;
-                font-size: 12px;
-                padding: 6px 12px;
-            }
-
-            .navigation {
-                top: auto;
-                bottom: 10px;
-                right: 10px;
-                transform: none;
-                padding: 8px;
-                gap: 10px;
-            }
-
-            .nav-btn {
-                padding: 8px 12px;
-                font-size: 12px;
-            }
-
-            .viewer-close {
-                top: 10px;
-                right: 10px;
-                padding: 8px 16px;
-                font-size: 12px;
-            }
-
-            .viewer-nav {
-                padding: 12px 16px;
-                font-size: 16px;
-            }
-
-            .viewer-nav.prev {
-                left: 10px;
-            }
-
-            .viewer-nav.next {
-                right: 10px;
-            }
-
-            .gallery-image img {
-                max-height: 60vh;
-            }
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>{{ title if title else 'imgur album' }}</h1>
-            <p class="description">{{ image_count }} image{{ 's' if image_count != 1 else '' }}</p>
-        </div>
-
-        <div class="gallery" id="gallery">
-            {% for image in images %}
-            <div class="gallery-image loading" id="image-{{ loop.index }}" data-index="{{ loop.index }}" onclick="openViewer({{ loop.index - 1 }})">
-                <img src="{{ image.url }}" alt="{{ image.name }}" onload="this.parentElement.classList.remove('loading')">
+<body class="bg-neutral-900 text-white">
+    <header class="sticky top-0 bg-neutral-800 border-b border-neutral-700 z-40">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center gap-3">
+                <a href="/" class="text-neutral-400 hover:text-white transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                </a>
+                <div>
+                    <h1 class="text-lg font-light">{{ title if title else 'imgur album' }}</h1>
+                    <p class="text-xs text-neutral-500 font-light">{{ image_count }} images</p>
+                </div>
             </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <div id="gallery" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {% for image in images %}
+            <a href="{{ image.url }}" 
+               data-pswp-width="{{ image.width }}" 
+               data-pswp-height="{{ image.height }}"
+               {% if image.mime_type and 'video' in image.mime_type %}
+               data-pswp-type="video"
+               {% endif %}
+               class="relative block aspect-square bg-neutral-800 rounded-lg overflow-hidden border border-neutral-700 hover:border-neutral-600 transition-colors group">
+                {% if image.mime_type and 'video' in image.mime_type %}
+                <video class="absolute inset-0 w-full h-full object-cover" muted>
+                    <source src="{{ image.url }}" type="{{ image.mime_type }}">
+                </video>
+                <div class="absolute top-2 right-2 bg-black/60 rounded-full p-2 z-30">
+                    <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                </div>
+                {% else %}
+                <img src="{{ image.url }}" 
+                     alt="{{ image.name }}" 
+                     loading="lazy"
+                     class="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+                {% endif %}
+                <div class="absolute inset-0 bg-black opacity-0 group-hover:opacity-40 transition-opacity pointer-events-none z-10"></div>
+                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"/>
+                    </svg>
+                </div>
+            </a>
             {% endfor %}
         </div>
-    </div>
+    </main>
 
-    <div class="image-counter" id="counter">
-        <span id="current-num">1</span> / {{ image_count }}
-    </div>
+    <script type="module">
+        import PhotoSwipeLightbox from 'https://cdn.jsdelivr.net/npm/photoswipe@5.4.3/dist/photoswipe-lightbox.esm.js';
+        import PhotoSwipe from 'https://cdn.jsdelivr.net/npm/photoswipe@5.4.3/dist/photoswipe.esm.js';
 
-    <div class="navigation">
-        <button class="nav-btn" id="prev-btn" onclick="navigateImage(-1)">↑ prev</button>
-        <span class="current-indicator">
-            <span id="nav-current">1</span> / {{ image_count }}
-        </span>
-        <button class="nav-btn" id="next-btn" onclick="navigateImage(1)">↓ next</button>
-    </div>
-
-    <div class="image-viewer" id="viewer" onclick="closeViewer(event)">
-        <button class="viewer-close" onclick="closeViewer(event)">close</button>
-        <button class="viewer-nav prev" id="viewer-prev" onclick="viewerNavigate(-1, event)">←</button>
-        <img id="viewer-image" src="" alt="">
-        <button class="viewer-nav next" id="viewer-next" onclick="viewerNavigate(1, event)">→</button>
-    </div>
-
-    <script>
-        const images = document.querySelectorAll('.gallery-image');
-        const totalImages = {{ image_count }};
-        const imageUrls = [
-            {% for image in images %}
-            "{{ image.url }}"{{ "," if not loop.last else "" }}
-            {% endfor %}
-        ];
-        let currentIndex = 0;
-        let viewerIndex = 0;
-
-        function updateCurrentImage() {
-            const currentNum = currentIndex + 1;
-            document.getElementById('current-num').textContent = currentNum;
-            document.getElementById('nav-current').textContent = currentNum;
-
-            document.getElementById('prev-btn').disabled = currentIndex === 0;
-            document.getElementById('next-btn').disabled = currentIndex === totalImages - 1;
-        }
-
-        function navigateImage(direction) {
-            const newIndex = currentIndex + direction;
-            
-            if (newIndex >= 0 && newIndex < totalImages) {
-                currentIndex = newIndex;
-                const targetImage = document.getElementById(`image-${currentIndex + 1}`);
-                targetImage.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                updateCurrentImage();
-            }
-        }
-
-        function openViewer(index) {
-            viewerIndex = index;
-            const viewer = document.getElementById('viewer');
-            const viewerImage = document.getElementById('viewer-image');
-            
-            viewerImage.src = imageUrls[viewerIndex];
-            viewer.classList.add('active');
-            document.body.style.overflow = 'hidden';
-            updateViewerButtons();
-        }
-
-        function closeViewer(event) {
-            if (event.target.id === 'viewer' || event.target.classList.contains('viewer-close')) {
-                const viewer = document.getElementById('viewer');
-                viewer.classList.remove('active');
-                document.body.style.overflow = 'auto';
-            }
-        }
-
-        function viewerNavigate(direction, event) {
-            event.stopPropagation();
-            const newIndex = viewerIndex + direction;
-            
-            if (newIndex >= 0 && newIndex < totalImages) {
-                viewerIndex = newIndex;
-                document.getElementById('viewer-image').src = imageUrls[viewerIndex];
-                updateViewerButtons();
-            }
-        }
-
-        function updateViewerButtons() {
-            document.getElementById('viewer-prev').disabled = viewerIndex === 0;
-            document.getElementById('viewer-next').disabled = viewerIndex === totalImages - 1;
-        }
-
-        document.addEventListener('keydown', (e) => {
-            const viewer = document.getElementById('viewer');
-            
-            if (viewer.classList.contains('active')) {
-                if (e.key === 'Escape') {
-                    closeViewer({ target: viewer });
-                } else if (e.key === 'ArrowLeft') {
-                    viewerNavigate(-1, e);
-                } else if (e.key === 'ArrowRight') {
-                    viewerNavigate(1, e);
-                }
-            } else {
-                if (e.key === 'ArrowLeft') {
-                    navigateImage(-1);
-                } else if (e.key === 'ArrowRight') {
-                    navigateImage(1);
-                }
-            }
+        const lightbox = new PhotoSwipeLightbox({
+            gallery: '#gallery',
+            children: 'a',
+            pswpModule: PhotoSwipe,
+            bgOpacity: 0.98,
+            padding: { top: 50, bottom: 50, left: 20, right: 20 },
+            wheelToZoom: true,
+            closeOnVerticalDrag: true,
+            pinchToClose: true,
+            zoom: true,
+            close: true,
+            counter: true,
+            arrowPrev: true,
+            arrowNext: true,
         });
 
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
-                    const index = parseInt(entry.target.dataset.index) - 1;
-                    if (index !== currentIndex) {
-                        currentIndex = index;
-                        updateCurrentImage();
-                    }
-                }
-            });
-        }, {
-            threshold: 0.5
+        // Add video support
+        lightbox.on('contentLoad', (e) => {
+            const { content } = e;
+            
+            if (content.type === 'video') {
+                e.preventDefault();
+                
+                content.element = document.createElement('video');
+                content.element.controls = true;
+                content.element.autoplay = true;
+                
+                const source = document.createElement('source');
+                source.src = content.data.src;
+                source.type = 'video/mp4';
+                
+                content.element.appendChild(source);
+                content.element.style.maxWidth = '100%';
+                content.element.style.maxHeight = '100%';
+            }
         });
-
-        images.forEach(img => observer.observe(img));
-
-        updateCurrentImage();
+        
+        lightbox.init();
     </script>
 </body>
 </html>

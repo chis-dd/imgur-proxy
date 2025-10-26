@@ -1,4 +1,4 @@
-# Imgur Proxy
+# mirrgr
 
 A self-hosted proxy service for accessing Imgur content. This proxy bypasses regional blocks by fetching images from Imgur on your behalf using proper browser headers to avoid rate limiting.
 
@@ -128,5 +128,4 @@ See `requirements.txt` for complete list.
 - Test the proxy manually first by visiting the web interface
 
 ## TODO
-- Create album and gallery support
 - Create docker image for quick deployment

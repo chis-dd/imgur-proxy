@@ -46,3 +46,13 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+#tailwind input
+static/input.css
+
+#npm to get photoswipe and tailwind ignore
+node_modules
+package-lock.json
+package.json
+static/css
+static/js
