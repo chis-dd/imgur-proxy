@@ -130,7 +130,11 @@ def validate_imgur_id(imgur_id: str) -> bool:
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Landing page"""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "base_domain": BASE_DOMAIN,
+        "base_path": BASE_PATH
+    })
 
 @app.get("/proxy")
 async def proxy_url(url: str):
